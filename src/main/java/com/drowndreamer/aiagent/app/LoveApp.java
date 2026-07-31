@@ -1,6 +1,7 @@
 package com.drowndreamer.aiagent.app;
 
 import com.drowndreamer.aiagent.advisor.MyLoggerAdvisor;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -10,7 +11,10 @@ import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +26,7 @@ public class LoveApp {
 
     private final ChatClient chatClient;
     private final VectorStore loveAppVectorStore;
+    private final RetrievalAugmentationAdvisor cloudRetrievalAugmentationAdvisor;
 
     private static final String SYSTEM_PROMPT = "扮演深耕恋爱心理领域的专家。开场向用户表明身份，告知用户可倾诉恋爱难题。" +
             "围绕单身、恋爱、已婚三种状态提问：单身状态询问社交圈拓展及追求心仪对象的困扰；" +
@@ -32,12 +37,17 @@ public class LoveApp {
      * 初始化 ChatCliient
      * @param chatModel
      */
-    public LoveApp(ChatModel chatModel, @Lazy VectorStore loveAppVectorStore) {
+    public LoveApp(
+            @Qualifier("openAiChatModel") ChatModel chatModel,
+            @Lazy VectorStore loveAppVectorStore,
+            @Qualifier("cloudRetrievalAugmentationAdvisor")
+            RetrievalAugmentationAdvisor cloudRetrievalAugmentationAdvisor) {
         this.loveAppVectorStore = loveAppVectorStore;
+        this.cloudRetrievalAugmentationAdvisor = cloudRetrievalAugmentationAdvisor;
         // 初始化基于内存的对话记忆
         ChatMemory chatMemory = MessageWindowChatMemory.builder()
                 .chatMemoryRepository(new InMemoryChatMemoryRepository())
-                .maxMessages(1)
+                .maxMessages(5)
                 .build();
 
         chatClient = ChatClient.builder(chatModel)
@@ -100,9 +110,33 @@ public class LoveApp {
         ChatResponse chatResponse = chatClient.prompt()
                 .user(message)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
-                .advisors(QuestionAnswerAdvisor.builder(loveAppVectorStore).build())
+                // Local RAG:
+                // .advisors(QuestionAnswerAdvisor.builder(loveAppVectorStore).build())
+                // Cloud RAG:
+                .advisors(cloudRetrievalAugmentationAdvisor)
                 .call()
                 .chatResponse();
         return chatResponse.getResult().getOutput().getText();
+    }
+
+    /**
+     * AI 恋爱知识库调用工具
+     */
+    @Resource
+    private ToolCallback[] allTools;
+
+    public String doChatWithTools(String message, String chatId) {
+        ChatResponse response = chatClient
+                .prompt()
+                .user(message)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
+                // 开启日志，便于观察效果
+                .advisors(new MyLoggerAdvisor())
+                .toolCallbacks(allTools)
+                .call()
+                .chatResponse();
+        String content = response.getResult().getOutput().getText();
+        log.info("content: {}", content);
+        return content;
     }
 }
