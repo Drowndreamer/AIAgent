@@ -27,6 +27,8 @@ knife4j:
   setting:
     language: zh_cn
 
-Logging:
+logging:
+  file:
+    name: logs/ai-agent.log
   Level:
     org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor: debug
