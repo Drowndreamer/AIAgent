@@ -43,16 +43,20 @@ describe('useChat', () => {
 
   it('sends Manus prompts as independent requests without chat history or chatId', async () => {
     const request = vi.fn<StreamRequest>(async (_endpoint, _params, callbacks) => {
-      callbacks.onEvent({ data: 'Step 1' })
-      callbacks.onEvent({ data: 'Step 2' })
+      callbacks.onEvent({ data: 'Step1: 工具 searchWeb返回的结果：{"link":"https://example.com"}' })
+      callbacks.onEvent({ data: 'Step2: 工具 scrapeWebPage返回的结果：很长的页面正文' })
+      callbacks.onEvent({ data: 'Step3: 最终结果：任务需要的资料已经整理完成。' })
     })
     const wrapper = mountChat(manusAppConfig, request)
 
     await wrapper.vm.send('处理任务')
 
     expect(request.mock.calls[0]?.[1]).toEqual({ message: '处理任务' })
-    expect(wrapper.vm.messages.at(-1)?.content).toBe('Step 1\n\nStep 2')
-    expect(wrapper.get('[data-test="last-message"]').text()).toBe('complete:Step 1\n\nStep 2')
+    expect(wrapper.vm.messages.at(-1)?.content).toContain('Step 1：调用 `searchWeb` 工具')
+    expect(wrapper.vm.messages.at(-1)?.content).toContain('Step 2：调用 `scrapeWebPage` 工具')
+    expect(wrapper.vm.messages.at(-1)?.content).toContain('### 最终结果')
+    expect(wrapper.vm.messages.at(-1)?.content).not.toContain('https://example.com')
+    expect(wrapper.get('[data-test="last-message"]').text()).toContain('complete:Step 1：调用 `searchWeb` 工具')
     wrapper.unmount()
   })
 

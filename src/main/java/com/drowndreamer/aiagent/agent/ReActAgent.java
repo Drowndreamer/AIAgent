@@ -25,6 +25,14 @@ public abstract class ReActAgent extends BaseAgent {
     public abstract String act();
 
     /**
+     * 返回无需继续调用工具时的最终内容。
+     * 子类可覆盖此方法，将模型生成的最终回答传递给调用方。
+     */
+    protected String getNoActionResult() {
+        return "思考完成，无需行动";
+    }
+
+    /**
      * 执行单个步骤，思考和行动
      * @return 步骤执行结果
      */
@@ -34,7 +42,7 @@ public abstract class ReActAgent extends BaseAgent {
             // 先思考
             boolean shouldAct = think();
             if (!shouldAct) {
-                return "思考完成，无需行动";
+                return getNoActionResult();
             }
             // 再行动
             return act();

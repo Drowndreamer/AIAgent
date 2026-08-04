@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { ManusOutputPresenter } from '../services/manus-output'
 import { streamSse } from '../services/sse'
 import type { ChatAppConfig, ChatMessage } from '../types/chat'
 
@@ -45,6 +46,7 @@ export function useChat(config: ChatAppConfig, requestStream = streamSse) {
 
     const params: Record<string, string> = { message: prompt }
     if (config.supportsChatId) params.chatId = sessionId.value
+    const manusOutput = config.id === 'manus' ? new ManusOutputPresenter() : null
 
     try {
       await requestStream(
@@ -53,6 +55,10 @@ export function useChat(config: ChatAppConfig, requestStream = streamSse) {
         {
           onEvent: ({ data }) => {
             if (!data) return
+            if (manusOutput) {
+              assistant.content = manusOutput.push(data)
+              return
+            }
             if (assistant.content && config.eventSeparator) {
               assistant.content += config.eventSeparator
             }
@@ -61,6 +67,8 @@ export function useChat(config: ChatAppConfig, requestStream = streamSse) {
         },
         controller.signal,
       )
+
+      if (manusOutput) assistant.content = manusOutput.finish()
 
       if (!assistant.content.trim()) {
         assistant.content = '没有收到有效回复，请稍后重试。'

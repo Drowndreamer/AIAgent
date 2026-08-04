@@ -33,6 +33,9 @@ public class ToolCallAgent extends ReActAgent{
     // 保存工具调用信息的响应结果（要调用哪些工具）
     private ChatResponse toolCallChatResponse;
 
+    // 模型不再调用工具时生成的最终回答
+    private String finalResponse;
+
     // 工具调用管理者
     private final ToolCallingManager toolCallingManager;
 
@@ -55,6 +58,7 @@ public class ToolCallAgent extends ReActAgent{
      */
     @Override
     public boolean think() {
+        this.finalResponse = null;
         // 1、校验提示词，拼接用户提示词
         if (StrUtil.isNotBlank(getNextStepPrompt())){
             UserMessage userMessage = new UserMessage(getNextStepPrompt());
@@ -88,6 +92,10 @@ public class ToolCallAgent extends ReActAgent{
             if(toolCallList.isEmpty()) {
                 // 只有不调用工具时，才需要手动记录助手消息
                 getMessageList().add(assistantMessage);
+                if (StrUtil.isNotBlank(result)) {
+                    this.finalResponse = result;
+                    setState(AgentState.FINISHED);
+                }
                 return false;
             } else {
                 // 需要调用工具时，无需记录助手消息，因为调用工具时，即执行 Act 时会记录的
@@ -98,6 +106,13 @@ public class ToolCallAgent extends ReActAgent{
             getMessageList().add(new AssistantMessage("处理时遇到了错误：" + e.getMessage()));
             return false;
         }
+    }
+
+    @Override
+    protected String getNoActionResult() {
+        return StrUtil.isNotBlank(finalResponse)
+                ? finalResponse
+                : super.getNoActionResult();
     }
 
     /**
